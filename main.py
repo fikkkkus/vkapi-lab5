@@ -1,172 +1,111 @@
-import requests
-import json
-from requests.exceptions import HTTPError, ConnectionError, Timeout, RequestException
+from Neo4jDatabase import Neo4jDatabase
+from UserDataController import *
 
+def get_access_token():
+    while True:
+        access_token = input("Введите токен доступа: ")
+        if access_token.strip():  # Проверяем, что строка не пустая
+            return access_token
+        print("Токен доступа не может быть пустым. Попробуйте снова.")
 
-# Основные данные пользователя и подписок
-class UserData:
-    def __init__(self, user_id, first_name, last_name, followers, subscriptions_users, subscriptions_groups):
-        self.id = user_id
-        self.first_name = first_name
-        self.last_name = last_name
-        self.followers = followers
-        self.subscriptions_users = subscriptions_users
-        self.subscriptions_groups = subscriptions_groups
+def get_user_id():
+    while True:
+        user_id = input("Введите ID пользователя: ")
+        if user_id.strip():  # Проверяем, что строка не пустая
+            return user_id
+        print("ID пользователя не может быть пустым. Попробуйте снова.")
 
+def get_recursion_depth():
+    while True:
+        try:
+            depth = int(input("Введите глубину рекурсии (>= 0, например, 2): "))
+            if depth < 0:
+                print("Глубина рекурсии должна быть неотрицательной.")
+                continue
+            return depth
+        except ValueError:
+            print("Некорректный ввод, попробуйте снова.")
 
-def get_data_from_vk(method, params):
-    url = f"https://api.vk.com/method/{method}"
+def get_top_users_count():
+    while True:
+        try:
+            top_users_count = int(input("Сколько топ пользователей по фолловерам показать? (>= 0, например, 5): "))
+            if top_users_count < 0:
+                print("Количество пользователей должно быть неотрицательным.")
+                continue
+            return top_users_count
+        except ValueError:
+            print("Некорректный ввод, попробуйте снова.")
+
+def get_top_groups_count():
+    while True:
+        try:
+            top_groups_count = int(input("Сколько популярных групп показать? (>= 0, например, 5): "))
+            if top_groups_count < 0:
+                print("Количество групп должно быть неотрицательным.")
+                continue
+            return top_groups_count
+        except ValueError:
+            print("Некорректный ввод, попробуйте снова.")
+
+def check_internet_connection(url="http://www.google.com"):
     try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()  # Проверка на ошибки HTTP
-        return response.json()
-    except HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")  # Проблемы с HTTP
-    except ConnectionError:
-        print("Error connecting to the server. Please check your internet connection.")
-    except Timeout:
-        print("Request timed out. Please try again later.")
-    except RequestException as req_err:
-        print(f"An error occurred: {req_err}")  # Другие ошибки запроса
-    return None  # Возвращаем None в случае ошибки
-
-
-# Основной метод для получения данных о пользователе
-def fetch_user_data(user_id, access_token):
-    params = {
-        "v": "5.131",
-        "access_token": access_token,
-        "user_ids": user_id,
-        "fields": "followers_count"
-    }
-
-    user_info = get_data_from_vk("users.get", params)
-    if not user_info or 'response' not in user_info:
-        print("Failed to fetch user information.")
-        return None
-
-    user_info = user_info["response"][0]
-
-    followers = fetch_followers(user_id, access_token)
-    subscriptions_users, subscriptions_groups = fetch_subscriptions(user_id,
-                                                                    access_token)
-
-    return UserData(
-        user_id=user_info["id"],
-        first_name=user_info["first_name"],
-        last_name=user_info["last_name"],
-        followers=followers,
-        subscriptions_users=subscriptions_users,
-        subscriptions_groups=subscriptions_groups
-    )
-
-
-# Функция для получения подписчиков
-def fetch_followers(user_id, access_token):
-    params = {
-        "v": "5.131",
-        "access_token": access_token,
-        "user_id": user_id
-    }
-    followers_data = get_data_from_vk("users.getFollowers", params)
-
-    if not followers_data or 'response' not in followers_data:
-        print("Failed to fetch followers information.")
-        return []
-
-    followers_data = followers_data["response"].get("items", [])
-
-    followers = []
-    for follower_id in followers_data:
-        follower_info = get_data_from_vk("users.get", {
-            "v": "5.131",
-            "access_token": access_token,
-            "user_ids": follower_id
-        })
-        if follower_info and 'response' in follower_info:
-            follower_info = follower_info["response"][0]
-            followers.append({
-                "id": follower_info["id"],
-                "first_name": follower_info["first_name"],
-                "last_name": follower_info["last_name"]
-            })
-    return followers
-
-
-# Функция для получения подписок
-def fetch_subscriptions(user_id, access_token):
-    params = {
-        "v": "5.131",
-        "access_token": access_token,
-        "user_id": user_id
-    }
-    subscriptions_data = get_data_from_vk("users.getSubscriptions", params)
-
-    if not subscriptions_data or 'response' not in subscriptions_data:
-        print("Failed to fetch subscriptions information.")
-        return [], []
-
-    subscriptions_users = subscriptions_data["response"].get("users", {}).get("items", [])
-    subscriptions_groups = subscriptions_data["response"].get("groups", {}).get("items", [])
-
-    # Получение списка пользователей
-    users_info = []
-    for user_id in subscriptions_users:
-        user_info = get_data_from_vk("users.get", {
-            "v": "5.131",
-            "access_token": access_token,
-            "user_ids": user_id
-        })
-        if user_info and 'response' in user_info:
-            user_info = user_info["response"][0]
-            users_info.append({
-                "id": user_info["id"],
-                "first_name": user_info["first_name"],
-                "last_name": user_info["last_name"]
-            })
-
-    # Получение списка групп
-    groups_info = []
-    for group_id in subscriptions_groups:
-        group_info = get_data_from_vk("groups.getById", {
-            "v": "5.131",
-            "access_token": access_token,
-            "group_ids": group_id
-        })
-        if group_info and 'response' in group_info:
-            group_info = group_info["response"][0]
-            groups_info.append({
-                "id": group_info["id"],
-                "name": group_info["name"]
-            })
-
-    return users_info, groups_info
-
-
-# Сохранение данных в JSON файл
-def save_data_to_file(user_data, file_path):
-    data = {
-        "id": user_data.id,
-        "first_name": user_data.first_name,
-        "last_name": user_data.last_name,
-        "followers": user_data.followers,
-        "subscriptions_users": user_data.subscriptions_users,  # Списки пользователей
-        "subscriptions_groups": user_data.subscriptions_groups  # Списки групп
-    }
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
+        # Попытка сделать GET-запрос
+        response = requests.get(url, timeout=3)  # Таймаут в 5 секунд
+        return response.status_code == 200  # Возвращаем True, если статус 200
+    except requests.ConnectionError:
+        return False  # Возвращаем False, если произошла ошибка соединени
 
 def main():
-    user_id = input("Введите ID пользователя ВКонтакте: ")
-    access_token = input("Введите access token: ")
 
-    user_data = fetch_user_data(user_id, access_token)
-    if user_data:
-        save_data_to_file(user_data, "result.json")
-        print("Данные сохранены в файл result.json в корне проекта")
-    else:
-        print("Не удалось получить данные о пользователе.")
+    if not check_internet_connection():
+        logger.error("Нет подключения к интернету. Проверьте ваше соединение.")
+        exit(1)  #
+
+    access_token = get_access_token()
+    user_id = get_user_id()
+    depth = get_recursion_depth()
+    top_users_count = get_top_users_count()
+    top_groups_count = get_top_groups_count()
+
+    user_data_collector = UserDataCollector(access_token)
+
+    # Создание экземпляра базы данных Neo4j и указание базы данных VKAPI
+    db = Neo4jDatabase(uri="neo4j://localhost:7687", user="neo4j", password="12345678", database="VKAPI")
+
+    try:
+        db.delete_all_data()  # Очистка базы данных
+
+        all_users = user_data_collector.fetch_data_recursive(user_id, max_depth=depth)
+        for user in all_users:
+            db.save_user(user)
+            if not user.isEndTreeNode:
+                for follower in user.followers:
+                    db.save_follow_relation(user.id, follower)
+                for group in user.subscriptions_groups:
+                    db.save_group(group)
+                    db.save_subscription_relation(user.id, group["id"])
+
+        total_users = db.get_total_users()
+        logger.info(f"Всего пользователей: {total_users}")
+
+        total_groups = db.get_total_groups()
+        logger.info(f"Всего групп: {total_groups}")
+
+        # Запросы для топов и взаимных фолловеров
+        if top_users_count > 0:
+            top_users = db.get_top_users_by_followers(top_users_count)[:top_users_count]
+            logger.info(f"Топ {top_users_count} пользователей с наибольшим количеством фолловеров: {top_users}")
+
+        if top_groups_count > 0:
+            top_groups = db.get_top_groups_by_followers(top_groups_count)[:top_groups_count]  # Замените на соответствующий метод
+            logger.info(f"Топ {top_groups_count} популярных групп: {top_groups}")
+
+        mutual_followers = db.get_mutual_followers()  # Замените на соответствующий метод
+        logger.info(f"Пользователи, которые фолловят друг друга : {mutual_followers}")
+
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     main()
